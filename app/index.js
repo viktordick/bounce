@@ -2,6 +2,7 @@ import init, { World } from "./pkg/hello_wasm.js";
 
 init().then(() => {
     var animating = true;
+    var last_draw = 0;
 
     const marble = $('<canvas>').attr('width', 21).attr('height', 21)[0]
     const marblectx = marble.getContext('2d')
@@ -19,10 +20,11 @@ init().then(() => {
 
     function draw(time) {
         if (animating) {
-            world.step(time);
+            world.step(time - last_draw);
             ctx.clearRect(0, 0, innerWidth, innerHeight)
             world.draw(draw_marble);
         }
+        last_draw = time;
         requestAnimationFrame(draw)
     }
     requestAnimationFrame(draw);
@@ -37,6 +39,8 @@ init().then(() => {
     $(window).on('resize', function() {
         clearTimeout(resizeTimeout);
         setTimeout(resize, 250);
+    }).on('click keydown', function(event) {
+        animating = !animating;
     });
 });
 

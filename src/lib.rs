@@ -63,27 +63,6 @@ pub struct World {
     width: f64,
     height: f64,
     m: Vec<Marble>,
-    last_time: f64,
-}
-
-impl World {
-    fn step_eps(&mut self, diff: f64) {
-        if diff > 100.0 {
-            for _ in 0..10 {
-                self.step_eps(diff/10.0)
-            }
-            return;
-        }
-        for marble in self.m.iter_mut() {
-            marble.step(diff, self.width, self.height);
-        }
-        for i in 0..self.m.len() {
-            let (left, right) = self.m.split_at_mut(i);
-            for j in 0..i {
-                left[j].check_collision(&mut right[0])
-            }
-        }
-    }
 }
 
 #[wasm_bindgen]
@@ -97,12 +76,24 @@ impl World {
             width: width,
             height: height,
             m: m,
-            last_time: 0.0,
         }
     }
-    pub fn step(&mut self, t: f64) {
-        self.step_eps(t - self.last_time);
-        self.last_time = t;
+    pub fn step(&mut self, dt: f64) {
+        if dt > 100.0 {
+            for _ in 0..10 {
+                self.step(dt/10.0)
+            }
+            return;
+        }
+        for marble in self.m.iter_mut() {
+            marble.step(dt, self.width, self.height);
+        }
+        for i in 0..self.m.len() {
+            let (left, right) = self.m.split_at_mut(i);
+            for j in 0..i {
+                left[j].check_collision(&mut right[0])
+            }
+        }
     }
     pub fn draw(&self, f: &js_sys::Function) {
         let this = JsValue::null();
