@@ -1,6 +1,5 @@
 import init, { World } from "./pkg/hello_wasm.js";
 
-
 init().then(() => {
     var animating = true;
 
@@ -15,19 +14,29 @@ init().then(() => {
 
     const ctx = document.getElementById('mycanvas').getContext("2d")
 
-    const world = World.new()
+    const world = World.new(innerWidth, innerHeight)
     const draw_marble = (x, y) => ctx.drawImage(marble, x, y);
 
     function draw(time) {
         if (animating) {
             world.step(time);
-            ctx.clearRect(0, 0, 500, 500)
+            ctx.clearRect(0, 0, innerWidth, innerHeight)
             world.draw(draw_marble);
         }
         requestAnimationFrame(draw)
     }
     requestAnimationFrame(draw);
-    $('button').on('click', function(event) {
-        animating = !animating;
+
+    function resize() {
+        $('canvas').attr('width', innerWidth).attr('height', innerHeight);
+        world.resize(innerWidth, innerHeight);
+    };
+    resize();
+
+    var resizeTimeout = null;
+    $(window).on('resize', function() {
+        clearTimeout(resizeTimeout);
+        setTimeout(resize, 250);
     });
 });
+

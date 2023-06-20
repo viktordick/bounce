@@ -6,51 +6,62 @@ struct Marble {
     v: [f64; 2],
 }
 
-fn sqr(x: f64) -> f64 { x*x }
 fn dot(x: [f64; 2], y: [f64; 2]) -> f64 {
     x[0]*y[0] + x[1]*y[1]
 }
 
 impl Marble {
-    fn new() -> Marble {
+    fn new(width: f64, height: f64) -> Marble {
         Marble {
-            p: [480.0*random(), 480.0*random()],
+            p: [(width-20.0)*random() + 10.0, (height-20.0)*random() + 10.0],
             v: [0.5*random()-0.25, 0.5*random()-0.25],
         }
     }
-    fn step(&mut self, diff: f64) {
+    fn step(&mut self, diff: f64, width: f64, height: f64) {
+        let dim = [width, height];
         for i in 0..2 {
             self.p[i] = self.p[i] + self.v[i] * diff;
-            if self.p[i] > 490.0 {
-                self.p[i] = 490.0;
+            if self.p[i] > dim[i]-10.0 && self.v[i] > 0.0 {
+                self.p[i] = dim[i]-10.0;
                 self.v[i] = -self.v[i];
             }
-            if self.p[i] < 10.0 {
+            if self.p[i] < 10.0 && self.v[i] < 0.0 {
                 self.p[i] = 10.0;
                 self.v[i] = -self.v[i];
             }
         }
     }
-    fn check_collision(&mut self, other: &mut Self) {
-        if sqr(self.p[0]-other.p[0]) + sqr(self.p[1] - other.p[1]) > 400.0 {
-            return;
-        }
+    fn check_collision(&mut self, othr: &mut Self) {
         // distance vector and one perpendicular to it
-        let d = [other.p[0] - self.p[0], other.p[1] - self.p[1]];
+        let d = [othr.p[0] - self.p[0], othr.p[1] - self.p[1]];
         let e = [d[1], -d[0]];
 
-        // decompose velocities into parallel and perpendicular parts
-        let v1 = [dot(d, self.v)/dot(d, d), dot(e, self.v)/dot(e, e)];
-        let v2 = [dot(d, other.v)/dot(d, d), dot(e, other.v)/dot(e, e)];
+        let dsqr = dot(d, d);
+        if dsqr > 400.0 {
+            return;
+        }
+
+        // decompose velocities into parallel and orthogonal parts
+        let dsqrinv = 1.0/dsqr;
+        let esqrinv = 1.0/dot(e, e);
+        let v1 = [dot(d, self.v)*dsqrinv, dot(e, self.v)*esqrinv];
+        let v2 = [dot(d, othr.v)*dsqrinv, dot(e, othr.v)*esqrinv];
 
         // Recompose with swapped parallel parts
         self.v = [v2[0]*d[0] + v1[1]*e[0], v2[0]*d[1] + v1[1]*e[1]];
-        other.v = [v1[0]*d[0] + v2[1]*e[0], v1[0]*d[1] + v2[1]*e[1]];
+        othr.v = [v1[0]*d[0] + v2[1]*e[0], v1[0]*d[1] + v2[1]*e[1]];
+
+        // shift positions so the distance becomes 20.0
+        let scale = 10.0*dsqrinv.sqrt()-0.5;
+        self.p = [self.p[0]-scale*d[0], self.p[1]-scale*d[1]];
+        othr.p = [othr.p[0]+scale*d[0], othr.p[1]+scale*d[1]];
     }
 }
 
 #[wasm_bindgen]
 pub struct World {
+    width: f64,
+    height: f64,
     m: Vec<Marble>,
     last_time: f64,
 }
@@ -64,7 +75,7 @@ impl World {
             return;
         }
         for marble in self.m.iter_mut() {
-            marble.step(diff);
+            marble.step(diff, self.width, self.height);
         }
         for i in 0..self.m.len() {
             let (left, right) = self.m.split_at_mut(i);
@@ -77,12 +88,14 @@ impl World {
 
 #[wasm_bindgen]
 impl World {
-    pub fn new() -> World{
+    pub fn new(width: f64, height: f64) -> World{
         let mut m = Vec::new();
-        for _ in 0..15 {
-            m.push(Marble::new());
+        for _ in 0..25 {
+            m.push(Marble::new(width, height));
         }
         World{
+            width: width,
+            height: height,
             m: m,
             last_time: 0.0,
         }
@@ -98,5 +111,9 @@ impl World {
             let y = JsValue::from(marble.p[1]-10.0);
             let _ = f.call2(&this, &x, &y);
         }
+    }
+    pub fn resize(&mut self, width: f64, height: f64) {
+        self.width = width;
+        self.height = height;
     }
 }
