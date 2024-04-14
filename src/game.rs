@@ -11,13 +11,18 @@ fn dot(x: [f64; 2], y: [f64; 2]) -> f64 {
     x[0]*y[0] + x[1]*y[1]
 }
 
+// Write the velocities of two marbles als linear combinations of a vector that points in the
+// direction between the two centers and one orthogonal to that. This allows to compute an elastic
+// collision by interchanging the parallel parts and an elastic collision with a fixed marble by
+// flipping the sign of the parallel part of the colliding marble.
 struct Decomposition {
     d: [f64; 2],  // distance vector
     o: [f64; 2],  // orthogonal vector
-    v_d: [f64; 2],
-    v_o: [f64; 2],
+    v_d: [f64; 2],  // parallel velocity coefficients for both velocities
+    v_o: [f64; 2],  // orthogonal velocity coefficients for both velocities
 }
 impl Decomposition {
+    // Returns None if the marbles did not actually collide (distance too large)
     fn new(x: &Marble, y: &Marble) -> Option<Decomposition> {
         let d = [y.p[0] - x.p[0], y.p[1] - x.p[1]];
         let o = [d[1], -d[0]];
@@ -37,6 +42,7 @@ impl Decomposition {
             v_o: [dot(o, x.v)*osqrinv, dot(o, y.v)*osqrinv],
         })
     }
+    // Recompute velocity in default (x/y) coordinate system
     fn restore(&self, idx: usize) -> [f64; 2] {
         [
             self.v_d[idx]*self.d[0] + self.v_o[idx]*self.o[0],
@@ -53,6 +59,7 @@ impl Marble {
             v: [0.5*rng.gen::<f64>()-0.25, 0.5*rng.gen::<f64>()-0.25],
         }
     }
+    // Move marble by a small amount, bouncing off the walls
     fn step(&mut self, diff: f64, width: f64, height: f64) {
         let dim = [width, height];
         for i in 0..2 {
@@ -67,30 +74,33 @@ impl Marble {
             }
         }
     }
+
+    // Check collision with other marble, bouncing off each other if they collide
     fn check_collision(&mut self, othr: &mut Self) {
         let mut decomp = match Decomposition::new(&self, &othr) {
             None => return,
             Some(d) => d,
         };
 
+        // If they actually move away from each other, don't do anything
         if decomp.v_d[1] > decomp.v_d[0] {
             return
         }
-        // Flip parallel parts
+        // Interchange parallel parts
         decomp.v_d = [decomp.v_d[1], decomp.v_d[0]];
         self.v = decomp.restore(0);
         othr.v = decomp.restore(1);
     }
 
+    // Same, but collision with a fixed marble
     fn check_collision_fixed(&mut self, othr: &Self) {
         let mut decomp = match Decomposition::new(&self, &othr) {
             None => return,
             Some(d) => d,
         };
 
-        // flip parallel part
+        // Flip parallel part
         if decomp.v_d[0] > 0.0 {
-            // flip parallel part
             decomp.v_d[0] = -decomp.v_d[0];
             self.v = decomp.restore(0);
         }
@@ -100,7 +110,9 @@ impl Marble {
 pub struct World {
     width: f64,
     height: f64,
+    // Marbles
     m: Vec<Marble>,
+    // Fixed larger marbles
     fixed: Vec<Marble>,
 }
 
@@ -122,13 +134,8 @@ impl World {
             fixed: f,
         }
     }
+    // Make a step with each marble and compute collisions
     pub fn step(&mut self, dt: f64) {
-        if dt > 100.0 {
-            for _ in 0..10 {
-                self.step(dt/10.0)
-            }
-            return;
-        }
         for marble in self.m.iter_mut() {
             marble.step(dt, self.width, self.height);
             for fixed in self.fixed.iter() {
@@ -143,6 +150,8 @@ impl World {
         }
     }
 
+    // Draw all marbles by calling the given draw function with the necessary coordinates, radiuses
+    // and colors.
     pub fn draw<F>(&self, mut f: F) -> Result<(), String>
         where F: FnMut(u32, u32, u32, [u8; 3]) -> Result<(), String> {
             for marble in self.m.iter() {
